@@ -11,6 +11,7 @@ import android.util.AttributeSet
 import android.util.Log
 import android.view.View
 import android.view.animation.LinearInterpolator
+import android.widget.ViewAnimator
 
 /**
  *  Create by GG on 2018/12/29
@@ -36,6 +37,8 @@ class LoadView : View {
         private var mRotationRadius: Float = 0.toFloat()
         // 每个小圆的半径 - 大圆半径的 1/8
         private var mCircleRadius: Float = 0.toFloat()
+        // 当前大圆的半径
+        private var mCurrentRotationRadius: Float = mRotationRadius
 
         private var mCenterX = 0F
         private var mCenterY = 0F
@@ -82,8 +85,10 @@ class LoadView : View {
         if (this::mLoadState.isInitialized) {
             if (mLoadState is RotationState) {
                 (mLoadState as RotationState).disappear()
+                mLoadState = MergeState(this)
             }
         }
+
     }
 
 
@@ -129,8 +134,31 @@ class LoadView : View {
         }
     }
 
+    class MergeState(val view: View) : LoadState() {
 
-    private abstract class LoadState {
+        private val animator: ValueAnimator  by lazy {
+            ObjectAnimator.ofFloat(mRotationRadius, 0f).apply {
+                duration = DURATION_TIME / 2
+                addUpdateListener {
+                    mCurrentRotationRadius = it.animatedValue as Float
+                    view.invalidate()
+                }
+
+            }
+        }
+
+        init {
+            animator.start()
+        }
+
+
+        override fun draw(canvas: Canvas?) {
+
+        }
+
+    }
+
+    abstract class LoadState {
         abstract fun draw(canvas: Canvas?)
     }
 
