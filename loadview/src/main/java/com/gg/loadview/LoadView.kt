@@ -1,5 +1,7 @@
 package com.gg.loadview
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
@@ -10,8 +12,8 @@ import android.graphics.Paint
 import android.util.AttributeSet
 import android.util.Log
 import android.view.View
+import android.view.animation.AnticipateInterpolator
 import android.view.animation.LinearInterpolator
-import android.widget.ViewAnimator
 
 /**
  *  Create by GG on 2018/12/29
@@ -51,6 +53,14 @@ class LoadView : View {
 
         var mCurrentAngle: Double = 0.0
 
+        var mLoadState: LoadState? = null
+
+        // 屏幕对角线的一半
+        private var mDiagonalDist: Float = 0.toFloat()
+
+        // 空心圆初始半径
+        private var mHoleRadius = 0f
+
     }
 
 
@@ -67,22 +77,23 @@ class LoadView : View {
 
         mRotationRadius = measuredWidth / 4f
         mCircleRadius = mRotationRadius / 8
+
+        mDiagonalDist = Math.sqrt(mCenterX * mCenterX + mCenterY * mCenterY.toDouble()).toFloat()
     }
 
-    private lateinit var mLoadState: LoadState
 
     @SuppressLint("DrawAllocation")
     override fun onDraw(canvas: Canvas?) {
-        if (!this::mLoadState.isInitialized) {
+        if (mLoadState == null) {
             mLoadState = RotationState(this)
         }
 
-        mLoadState.draw(canvas)
+        mLoadState?.draw(canvas)
     }
 
 
     fun disappear() {
-        if (this::mLoadState.isInitialized) {
+        if (mLoadState != null) {
             if (mLoadState is RotationState) {
                 (mLoadState as RotationState).disappear()
                 mLoadState = MergeState(this)
@@ -143,7 +154,14 @@ class LoadView : View {
                     mCurrentRotationRadius = it.animatedValue as Float
                     view.invalidate()
                 }
+                interpolator = AnticipateInterpolator(5f)
 
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: Animator?) {
+                        super.onAnimationEnd(animation)
+                        mLoadState = ExpendState(view)
+                    }
+                })
             }
         }
 
@@ -153,10 +171,52 @@ class LoadView : View {
 
 
         override fun draw(canvas: Canvas?) {
+            canvas?.drawColor(Color.WHITE)
+            mCircleColors.forEachIndexed { index, i ->
+                val cx = mCenterX + Math.cos(mCurrentAngle * index).toFloat() * mCurrentRotationRadius
+                val cy = mCenterY + Math.sin(mCurrentAngle * index).toFloat() * mCurrentRotationRadius
+                mPaint.color = i
+//                Log.w("cx", cx.toString())
+//                Log.w("cy", cy.toString())
+                canvas?.drawCircle(cx, cy, mCircleRadius, mPaint)
+            }
 
         }
 
     }
+
+
+    class ExpendState(val view: View) : LoadState() {
+
+        private val animator: ValueAnimator by lazy {
+            ObjectAnimator.ofFloat(0f, mDiagonalDist).apply {
+                duration = DURATION_TIME
+                addUpdateListener {
+                    mHoleRadius = it.animatedValue as Float
+                    view.invalidate()
+                }
+
+            }
+        }
+
+        init {
+            animator.start()
+        }
+
+        override fun draw(canvas: Canvas?) {
+            // 画笔的宽度
+            val strokeWidth = mDiagonalDist - mHoleRadius
+            mPaint.strokeWidth = strokeWidth
+            mPaint.color = Color.WHITE
+            mPaint.style = Paint.Style.STROKE
+            Log.e("TAG", "mHoleRadius -> $mHoleRadius")
+            val radius = strokeWidth / 2 + mHoleRadius
+            // 绘制一个圆
+            canvas?.drawCircle(mCenterX, mCenterY, radius, mPaint)
+        }
+
+    }
+
 
     abstract class LoadState {
         abstract fun draw(canvas: Canvas?)
